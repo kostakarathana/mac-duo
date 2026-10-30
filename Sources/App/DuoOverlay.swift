@@ -41,6 +41,9 @@ final class DuoOverlay {
             window = w; canvas = c
         }
         window?.alphaValue = 1
+        // During a fold the overlay swallows the click that dismisses it, so it can't land on
+        // whatever was under the cursor.
+        window?.ignoresMouseEvents = mode == .fade
         canvas?.configure(mode: mode, snapshot: snapshot, scale: screen.backingScaleFactor)
         hasSnapshot = snapshot != nil
         canvas?.apply(mode == .fold ? .fold(0) : .glossyFade(0))
@@ -109,31 +112,39 @@ final class CanvasView: NSView {
 
 /// The layer stack (pure Core Animation, so it can also be rendered offscreen):
 ///  root (black when we have a snapshot)
-///   └ panel — the "screen" that folds about its bottom edge (the hinge) or recedes
-///      ├ sharp / soft / heavy — the desktop at three blur levels, blended with gradient masks
-///      ├ frost — white glass tint
-///      ├ shade — dimming, darker toward the free edge
-///      ├ sheen — moving specular highlight
-///      └ rim — glassy edge highlight
-///   └ hinge — soft glow along the hinge while folding
+///   ├ panel — the screen image
+///   │  ├ sharp / soft / heavy — the desktop at three blur levels, blended with gradient masks
+///   │  ├ frost — white glass tint
+///   │  ├ shade — dimming
+///   │  ├ sheen — specular highlight
+///   │  └ rim — glassy edge (fade only)
+///   ├ vignette — pool of light shrinking into the hinge (fold only)
+///   └ hinge — unused glow, kept hidden
 final class DuoScene {
     let root = CALayer()
     private let panel = CALayer()
     private let sharp = CALayer(), soft = CALayer(), heavy = CALayer()
     private let softMask = CAGradientLayer(), heavyMask = CAGradientLayer()
-    private let frost = CALayer()
+    private let frost = CAGradientLayer()
     private let shade = CAGradientLayer()
     private let sheen = CAGradientLayer()
     private let rim = CALayer()
     private let hinge = CAGradientLayer()
+    private let vignette = CAGradientLayer()
     private var mode: DuoOverlay.Mode = .fold
     private var hasImage = false
+    private var aspect: CGFloat = 0.65
     /// Opacity for the system backdrop blur when there's no screenshot to work with.
     private(set) var fallbackBlur = 0.0
 
     init() {
         root.addSublayer(panel)
+        root.addSublayer(vignette)
         root.addSublayer(hinge)
+        vignette.type = .radial
+        vignette.colors = [NSColor(white: 0, alpha: 0).cgColor, NSColor(white: 0, alpha: 0).cgColor,
+                           NSColor(white: 0, alpha: 0.85).cgColor, NSColor.black.cgColor]
+        vignette.locations = [0, 0.45, 0.85, 1]
         for l in [sharp, soft, heavy] {
             l.contentsGravity = .resize
             panel.addSublayer(l)
@@ -145,18 +156,16 @@ final class DuoScene {
             m.startPoint = CGPoint(x: 0.5, y: 0)
             m.endPoint = CGPoint(x: 0.5, y: 1)
         }
-        frost.backgroundColor = NSColor.white.cgColor
+        frost.startPoint = CGPoint(x: 0.5, y: 0)
+        frost.endPoint = CGPoint(x: 0.5, y: 1)
         panel.addSublayer(frost)
         panel.addSublayer(shade)
-        sheen.colors = [NSColor(white: 1, alpha: 0).cgColor, NSColor(white: 1, alpha: 0.9).cgColor, NSColor(white: 1, alpha: 0).cgColor]
         panel.addSublayer(sheen)
         rim.borderColor = NSColor.white.cgColor
         rim.borderWidth = 1.5
         panel.addSublayer(rim)
         panel.masksToBounds = true
-        hinge.colors = [NSColor(white: 1, alpha: 0.5).cgColor, NSColor(white: 1, alpha: 0).cgColor]
-        hinge.startPoint = CGPoint(x: 0.5, y: 0)
-        hinge.endPoint = CGPoint(x: 0.5, y: 1)
+        hinge.isHidden = true
     }
 
     func configure(bounds b: CGRect, mode: DuoOverlay.Mode, snapshot: Snapshot?, scale: CGFloat) {
@@ -164,21 +173,14 @@ final class DuoScene {
         self.mode = mode
         hasImage = snapshot != nil
         root.frame = b
-        var persp = CATransform3DIdentity
-        persp.m34 = -1 / (b.height * 1.9)
-        root.sublayerTransform = persp
         root.backgroundColor = hasImage ? NSColor.black.cgColor : NSColor.clear.cgColor
-
         panel.transform = CATransform3DIdentity
+        panel.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        panel.bounds = CGRect(origin: .zero, size: b.size)
+        panel.position = CGPoint(x: b.width / 2, y: b.height / 2)
         if mode == .fold {
-            panel.anchorPoint = CGPoint(x: 0.5, y: 0)
-            panel.bounds = CGRect(origin: .zero, size: b.size)
-            panel.position = CGPoint(x: b.width / 2, y: 0)
             sheen.startPoint = CGPoint(x: 0.5, y: 0); sheen.endPoint = CGPoint(x: 0.5, y: 1)
         } else {
-            panel.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            panel.bounds = CGRect(origin: .zero, size: b.size)
-            panel.position = CGPoint(x: b.width / 2, y: b.height / 2)
             sheen.startPoint = CGPoint(x: 0, y: 1); sheen.endPoint = CGPoint(x: 1, y: 0)
         }
         for l in [sharp, soft, heavy, frost, shade, sheen, rim, softMask, heavyMask] { l.frame = panel.bounds }
@@ -186,29 +188,76 @@ final class DuoScene {
         soft.contents = snapshot?.soft
         heavy.contents = snapshot?.heavy
         for l in [sharp, soft, heavy] { l.contentsScale = scale; l.isHidden = !hasImage }
-        hinge.frame = CGRect(x: 0, y: 0, width: b.width, height: b.height * 0.05)
+        vignette.frame = CGRect(origin: .zero, size: b.size)
+        vignette.isHidden = mode != .fold
+        aspect = b.height / max(1, b.width)
         CATransaction.commit()
     }
 
+
     func apply(_ f: FrameParams) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        let foldMode = mode == .fold
+        if mode == .fold { applyFold(f) } else { applyFade(f) }
+        CATransaction.commit()
+    }
+
+    private static func clear(_ a: CGFloat = 0) -> CGColor { NSColor(white: 0, alpha: a).cgColor }
+    private static func white(_ a: CGFloat) -> CGColor { NSColor(white: 1, alpha: a).cgColor }
+    private static func nums(_ v: [Double]) -> [NSNumber] { v.map { NSNumber(value: $0) } }
+
+    /// The screen never moves; blur, frost and darkness roll down from the top edge into the
+    /// hinge as soft gradients, and the light pools toward the hinge until it's gone.
+    private func applyFold(_ f: FrameParams) {
+        panel.transform = CATransform3DIdentity
+        panel.cornerRadius = 0
+        rim.opacity = 0
+        hinge.opacity = 0
+        let front = f.blurFront, dark = f.darkFront
+
         if hasImage {
-            var t = CATransform3DIdentity
-            if foldMode {
-                // Tilt the top edge away from the viewer, folding into the hinge.
-                t = CATransform3DRotate(t, CGFloat(-f.rotation * .pi / 180), 1, 0, 0)
-            }
-            t = CATransform3DScale(t, CGFloat(f.scale), CGFloat(f.scale), 1)
-            panel.transform = t
+            panel.opacity = Float(f.panelOpacity)
+            soft.opacity = Float(f.softBlur)
+            heavy.opacity = Float(f.heavyBlur)
+            // Gradient y runs 0 (hinge, bottom) → 1 (top edge). Blur is opaque above the front.
+            softMask.locations = Self.nums([front - 0.28, front + 0.04])
+            heavyMask.locations = Self.nums([front - 0.02, front + 0.32])
+            fallbackBlur = 0
+        } else {
+            panel.opacity = 1
+            fallbackBlur = f.softBlur * (1 - Ease.smoothstep(0.8, 1, f.shade))
+        }
+
+        frost.colors = [Self.white(0), Self.white(CGFloat(f.frost))]
+        frost.locations = Self.nums([front - 0.3, front + 0.1])
+        frost.opacity = 1
+
+        // Darkness: light veil everywhere that deepens, fully black above the dark front.
+        let veil = CGFloat(0.3 * f.shade)
+        shade.colors = [Self.clear(veil), Self.clear(1)]
+        shade.locations = Self.nums([dark - 0.5, dark])
+        shade.startPoint = CGPoint(x: 0.5, y: 0); shade.endPoint = CGPoint(x: 0.5, y: 1)
+
+        // Pool of light centred on the hinge that shrinks into it.
+        let r = CGFloat(f.vignette)
+        vignette.startPoint = CGPoint(x: 0.5, y: 0)
+        vignette.endPoint = CGPoint(x: 0.5 + r * aspect * 1.25, y: r)
+        vignette.opacity = hasImage || f.shade > 0 ? 1 : 0
+
+        // A faint glassy glow riding just ahead of the frost.
+        sheen.colors = [Self.white(0), Self.white(0.9), Self.white(0)]
+        sheen.opacity = Float(f.sheen)
+        sheen.locations = Self.nums([front - 0.1, front - 0.02, front + 0.06])
+    }
+
+    private func applyFade(_ f: FrameParams) {
+        if hasImage {
+            panel.transform = CATransform3DMakeScale(CGFloat(f.scale), CGFloat(f.scale), 1)
             panel.cornerRadius = CGFloat(f.cornerRadius)
             panel.opacity = Float(f.panelOpacity)
             soft.opacity = Float(f.softBlur)
             heavy.opacity = Float(f.heavyBlur)
-            let reach = foldMode ? f.blurReach : 1
-            let l0 = (1 - reach) * 0.6, l1 = min(1, l0 + 0.4)
-            softMask.locations = [NSNumber(value: foldMode ? l0 * 0.7 : 0), NSNumber(value: foldMode ? l1 * 0.8 : 0.001)]
-            heavyMask.locations = [NSNumber(value: foldMode ? l0 + 0.15 : 0), NSNumber(value: foldMode ? min(1, l1 + 0.2) : 0.001)]
+            softMask.locations = Self.nums([0, 0.001])
+            heavyMask.locations = Self.nums([0, 0.001])
             fallbackBlur = 0
         } else {
             // No screenshot (Screen Recording not granted): frosted backdrop blur + dimming instead.
@@ -217,18 +266,17 @@ final class DuoScene {
             panel.opacity = 1
             fallbackBlur = max(f.softBlur, f.heavyBlur) * (1 - Ease.smoothstep(0.85, 1, max(f.shade, 1 - f.panelOpacity)))
         }
-        frost.opacity = Float(f.frost)
+        frost.colors = [Self.white(CGFloat(f.frost)), Self.white(CGFloat(f.frost))]
+        frost.locations = Self.nums([0, 1])
         let s = hasImage ? f.shade : max(f.shade, 1 - f.panelOpacity)
-        shade.colors = [NSColor(white: 0, alpha: s * (foldMode ? 0.7 : 1)).cgColor,
-                        NSColor(white: 0, alpha: min(1, s * (foldMode ? 1.1 : 1))).cgColor]
-        shade.startPoint = CGPoint(x: 0.5, y: 0); shade.endPoint = CGPoint(x: 0.5, y: 1)
+        shade.colors = [Self.clear(CGFloat(s)), Self.clear(CGFloat(s))]
+        shade.locations = Self.nums([0, 1])
+        sheen.colors = [Self.white(0), Self.white(0.9), Self.white(0)]
         sheen.opacity = Float(f.sheen)
-        let pos = foldMode ? 0.08 + 0.85 * f.sheenPosition : -0.2 + 1.4 * f.sheenPosition
-        let w = foldMode ? 0.10 : 0.16
-        sheen.locations = [NSNumber(value: pos - w), NSNumber(value: pos), NSNumber(value: pos + w)]
+        let pos = -0.2 + 1.4 * f.sheenPosition
+        sheen.locations = Self.nums([pos - 0.16, pos, pos + 0.16])
         rim.cornerRadius = CGFloat(f.cornerRadius)
         rim.opacity = Float(min(1, f.sheen * 0.7 + f.frost))
-        hinge.opacity = foldMode && hasImage ? Float(f.sheen * 0.6) : 0
-        CATransaction.commit()
+        hinge.opacity = 0
     }
 }

@@ -36,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var snapshot: Snapshot?
     private var capturing = false
     private var shown = 0.0
+    private var foldShownAt: CFTimeInterval?
+    private var dismissing: (start: CFTimeInterval, from: Double)?
     private var lastGoodRead = CACurrentMediaTime()
     private var asleep = false
 
@@ -54,6 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var demo: DuoOverlay.Mode?
     /// Scripted lid motion (time, angle) used instead of the sensor by `--simulate`.
     var simulated: [(t: Double, a: Double)]?
+    /// Simulated user input time (seconds into the simulation) for `--simulate`.
+    var simulatedInputAt: Double?
     private var simStart: CFTimeInterval = 0
     private var wasVisible = false
     private var log: [String] = []
@@ -133,15 +137,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             handle(e, angle: angle)
         }
 
-        let target = detector.progress
-        // Critically-damped follow so the sensor's 1° steps never look jittery.
-        let k = 1 - exp(-dt / 0.035)
-        shown += (target - shown) * k
-        if abs(target - shown) < 0.002 { shown = target }
+        // A started fold holds until the user touches the Mac: trackpad, click, scroll or key.
+        if overlay.isVisible, overlay.mode == .fold, dismissing == nil, let since = foldShownAt {
+            switch detector.state {
+            case .folding, .unfolding:
+                if userInput(after: since + 0.3, now: now) {
+                    detector.dismiss()
+                    dismissing = (now, shown)
+                }
+            default: break
+            }
+        }
 
-        if overlay.isVisible, overlay.mode == .fold {
+        if let d = dismissing {
+            // Quick unfold back to the desktop.
+            let u = min(1, (now - d.start) / 0.45)
+            shown = d.from * (1 - Ease.inOut(u))
             overlay.render(.fold(shown))
-            if !detector.isActive, shown <= 0.001 { overlay.hide() }
+            if u >= 1 { dismissing = nil; foldShownAt = nil; overlay.hide() }
+        } else {
+            let target = detector.progress
+            // Critically-damped follow so the sensor's 1° steps never look jittery.
+            let k = 1 - exp(-dt / 0.035)
+            shown += (target - shown) * k
+            if abs(target - shown) < 0.002 { shown = target }
+
+            if overlay.isVisible, overlay.mode == .fold {
+                overlay.render(.fold(shown))
+                if !detector.isActive, shown <= 0.001 { foldShownAt = nil; overlay.hide() }
+            }
         }
         if simulated != nil, overlay.isVisible != wasVisible {
             wasVisible = overlay.isVisible
@@ -156,18 +180,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .beginFold:
             guard let screen = DuoOverlay.builtInScreen() else { return }
             let fresh = snapshot.flatMap { Date().timeIntervalSince($0.takenAt) < 4 ? $0 : nil }
-            shown = 0
+            if dismissing != nil || !overlay.isVisible { shown = 0 }
+            dismissing = nil
+            foldShownAt = CACurrentMediaTime()
             overlay.show(.fold, snapshot: fresh, on: screen)
             if fresh == nil { captureSnapshot() }
-        case .cancel, .finished:
+        case .finished:
             break // `shown` eases back to 0, then the overlay hides itself
         case .closed, .beginUnfold:
             if !overlay.isVisible, let s = DuoOverlay.builtInScreen() { overlay.show(.fold, snapshot: snapshot, on: s) }
         }
     }
 
+    /// True if any keyboard / mouse / trackpad event happened after `t` (no permission needed).
+    private func userInput(after t: CFTimeInterval, now: CFTimeInterval) -> Bool {
+        if let at = simulatedInputAt { return now - simStart >= at && simStart + at > t }
+        let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: CGEventType(rawValue: ~0)!)
+        return now - idle > t
+    }
+
     private func resetFold() {
-        detector.reset(); shown = 0
+        detector.reset(); shown = 0; dismissing = nil; foldShownAt = nil
         if overlay.mode == .fold { overlay.hide() }
     }
 
@@ -342,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         m.addItem(toggle("Glossy fade on Shut Down / Restart", Prefs.shutdownFadeEnabled, #selector(toggleShutdown)))
 
         let sens = NSMenu()
-        for (s, label) in [(DetectorConfig.Sensitivity.relaxed, "Relaxed — folds a bit earlier"),
+        for (s, label) in [(DetectorConfig.Sensitivity.relaxed, "Relaxed — folds earlier, with less motion"),
                            (.normal, "Normal"),
                            (.strict, "Strict — only fast, deliberate closes")] {
             let i = NSMenuItem(title: label, action: #selector(setSensitivity(_:)), keyEquivalent: "")
@@ -440,7 +473,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         a.informativeText = """
         Look for the laptop icon in your menu bar.
 
-        • Close your lid and the screen folds away like iPhone Duo. Normal screen adjustments are ignored.
+        • Close your lid and the screen folds away like iPhone Duo. Normal screen adjustments are ignored. If you pause, it waits; touch the trackpad or a key to bring your desktop back.
         • Hold the power button and the screen fades away with a glossy sheen.
 
         Two optional permissions make it look its best:

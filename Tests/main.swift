@@ -59,8 +59,8 @@ test("quick nudge 125° → 95°") {
     let r = Trace(points: [(0, 125), (0.3, 95), (2, 95)]).run()
     check(!folded(r.events), "\(r.events)")
 }
-test("fast tilt down to 70° (watching from above)") {
-    let r = Trace(points: [(0, 110), (0.4, 70), (3, 70)]).run()
+test("tilt down to 75° over a second (watching from above)") {
+    let r = Trace(points: [(0, 110), (1.2, 75), (3, 75)]).run()
     check(!folded(r.events), "\(r.events)")
 }
 test("slow lean to 60° to block glare") {
@@ -73,8 +73,13 @@ test("repeated small wobbles 95–110°") {
     let r = Trace(points: pts, jitter: 1).run()
     check(!folded(r.events), "\(r.events)")
 }
-test("strict preset ignores a moderate dip to 50°") {
-    let r = Trace(points: [(0, 100), (0.6, 50), (3, 50)]).run(.preset(.strict))
+test("strict preset ignores a quick dip that normal folds") {
+    let trace = Trace(points: [(0, 100), (0.6, 55), (3, 55)])
+    check(folded(trace.run().events), "normal should fold")
+    check(!folded(trace.run(.preset(.strict)).events), "strict folded")
+}
+test("fast nudge between working angles 125° ↔ 100°") {
+    let r = Trace(points: [(0, 125), (0.25, 100), (0.6, 100), (0.85, 125), (2, 125)], jitter: 1).run()
     check(!folded(r.events), "\(r.events)")
 }
 
@@ -85,7 +90,16 @@ test("normal close 110° → 0° in 0.8 s") {
     check(folded(r.events), "no fold: \(r.events)")
     check(r.events.contains(.closed), "never closed")
     check(r.progress.last == 1, "progress \(r.progress.last!)")
-    check(!r.events.contains(.cancel), "cancelled")
+}
+test("fold starts early in a normal close (above 70°)") {
+    var d = CloseDetector()
+    var t = 0.0, startAngle = -1.0
+    for i in 0...60 {
+        let a = (110 - 110 * Double(i) / 48).rounded()
+        for e in d.update(angle: max(0, a), at: t) { if case .beginFold(let s) = e { startAngle = s } }
+        t += 1 / 60
+    }
+    check(startAngle >= 70, "fold began at \(startAngle)°")
 }
 test("fold progress tracks the lid smoothly (no big jumps)") {
     let r = Trace(points: [(0, 110), (1.0, 0), (1.3, 0)]).run()
@@ -116,18 +130,37 @@ test("every preset folds a normal close") {
     }
 }
 
-// MARK: - Change of mind
+// MARK: - A started fold holds until the user touches the Mac
 
-test("start closing then reopen cancels and returns to clear") {
-    let r = Trace(points: [(0, 110), (0.5, 25), (0.9, 110), (1.5, 110)]).run()
+test("start closing then reopen: fold holds, never reverses on its own") {
+    let r = Trace(points: [(0, 110), (0.5, 25), (0.9, 110), (3, 110)]).run()
     check(folded(r.events), "should have started")
-    check(r.events.contains(.cancel), "\(r.events)")
-    check(r.progress.last == 0 && r.det.state == .idle, "not cleared")
+    if case .folding = r.det.state {} else { check(false, "state \(r.det.state)") }
+    let peak = r.progress.max()!
+    check(r.progress.last! == peak && peak > 0.5, "progress fell back: last \(r.progress.last!) peak \(peak)")
 }
-test("start closing then hold mid-way cancels after stall") {
-    let r = Trace(points: [(0, 110), (0.6, 35), (3, 35)]).run()
-    check(folded(r.events) && r.events.contains(.cancel), "\(r.events)")
-    check(r.det.state == .idle, "\(r.det.state)")
+test("pause mid-way: fold holds where it is") {
+    let r = Trace(points: [(0, 110), (0.6, 40), (4, 40)]).run()
+    if case .folding = r.det.state {} else { check(false, "state \(r.det.state)") }
+    check(r.progress.last! > 0.4, "progress \(r.progress.last!)")
+}
+test("progress never decreases while folding") {
+    let r = Trace(points: [(0, 110), (0.4, 50), (0.6, 60), (0.9, 30), (1.2, 45), (1.5, 0)], jitter: 1.5).run()
+    var ok = true
+    for i in 1..<r.progress.count where r.progress[i] < r.progress[i - 1] && r.progress[i - 1] < 1 { ok = false }
+    check(ok, "progress decreased")
+}
+test("dismiss clears the fold, and a new close folds again") {
+    var d = CloseDetector()
+    var t = 0.0
+    for a in stride(from: 110.0, through: 40, by: -3) { d.update(angle: a, at: t); t += 1 / 60 }
+    check(d.isActive, "not folding")
+    d.dismiss()
+    check(d.state == .idle && d.progress == 0, "\(d.state)")
+    for _ in 0..<60 { d.update(angle: 40, at: t); t += 1 / 60 }
+    check(d.state == .idle, "re-folded while still")
+    for a in stride(from: 110.0, through: 0, by: -3) { d.update(angle: a, at: t); t += 1 / 60 }
+    if case .closed = d.state {} else { check(false, "second close: \(d.state)") }
 }
 test("close then reopen unfolds and finishes") {
     let r = Trace(points: [(0, 110), (0.8, 0), (2, 0), (2.8, 110), (3.5, 110)]).run()
@@ -179,12 +212,25 @@ test("stray key-up ignored") {
 
 // MARK: - Animation curves
 
-test("fold frames: start clear, end gone, monotone dimming") {
+test("fold frames: start clear, end gone, no moving box") {
     let a = FrameParams.fold(0), z = FrameParams.fold(1)
-    check(a.rotation == 0 && a.shade == 0 && a.panelOpacity == 1 && a.softBlur == 0, "start \(a)")
-    check(z.panelOpacity == 0 && z.shade > 0.9, "end \(z)")
-    var last = -1.0
-    for i in 0...100 { let s = FrameParams.fold(Double(i) / 100).shade; check(s >= last, "shade dips at \(i)"); last = s }
+    check(a.shade == 0 && a.panelOpacity == 1 && a.softBlur == 0 && a.vignette > 2, "start \(a)")
+    check(a.blurFront > 1, "frost already on screen at start")
+    check(z.panelOpacity == 0 && z.shade > 0.99 && z.blurFront < 0 && z.darkFront < 0, "end \(z)")
+    for i in 0...100 {
+        let f = FrameParams.fold(Double(i) / 100)
+        check(f.rotation == 0 && f.scale == 1 && f.cornerRadius == 0, "box transform at \(i)")
+    }
+    var last = FrameParams.fold(0)
+    for i in 1...100 {
+        let f = FrameParams.fold(Double(i) / 100)
+        check(f.shade >= last.shade && f.blurFront <= last.blurFront && f.darkFront <= last.darkFront && f.vignette <= last.vignette, "not monotone at \(i)")
+        last = f
+    }
+}
+test("fold is visible early: frost starts within the first 10% of the close") {
+    let f = FrameParams.fold(0.1)
+    check(f.softBlur > 0.5 && f.blurFront < 1.0, "\(f.softBlur) \(f.blurFront)")
 }
 test("glossy fade: sheen peaks mid-way, ends black") {
     let mid = (0...100).map { FrameParams.glossyFade(Double($0) / 100).sheen }

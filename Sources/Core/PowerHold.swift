@@ -73,25 +73,33 @@ public struct FrameParams: Equatable, Sendable {
     public var sheen: Double = 0           // specular highlight strength
     public var sheenPosition: Double = 0   // 0...1 along its sweep
     public var panelOpacity: Double = 1
+    /// Fold only: where the frosted region ends, measured from the hinge (0) to the top edge (1).
+    /// Everything above the front is blurred; it sweeps down into the hinge as the lid closes.
+    public var blurFront: Double = 1.3
+    /// Fold only: same idea for the darkness, trailing slightly behind the blur.
+    public var darkFront: Double = 1.6
+    /// Fold only: radius of the light pool centred on the hinge (in screen heights).
+    public var vignette: Double = 2.5
 
     public init() {}
 
-    /// iPhone Duo-style fold: the desktop bends toward the hinge, sharp near the hinge and
-    /// increasingly frosted toward the free (top) edge, dimming until it vanishes.
+    /// iPhone Duo-style fold: no moving box. The screen stays put while a frosted blur and
+    /// then darkness roll down from the free (top) edge into the hinge, and the light pools
+    /// toward the hinge before vanishing — all soft gradients.
     public static func fold(_ p: Double) -> FrameParams {
         let p = Ease.clamp(p)
         var f = FrameParams()
-        f.rotation = 78 * Ease.smoothstep(0, 1, p * 0.85 + 0.15 * p * p)
-        f.scale = 1 - 0.06 * p
-        f.cornerRadius = 28 * Ease.smoothstep(0, 0.4, p)
-        f.softBlur = Ease.smoothstep(0, 0.3, p)
-        f.heavyBlur = Ease.smoothstep(0.15, 0.65, p)
-        f.blurReach = Ease.smoothstep(0.05, 0.95, p)
-        f.frost = 0.14 * Ease.bump(p, peak: 0.45)
-        f.shade = Ease.smoothstep(0.1, 0.95, p) * 0.92
-        f.sheen = 0.55 * Ease.bump(p, peak: 0.4)
-        f.sheenPosition = p
-        f.panelOpacity = 1 - Ease.smoothstep(0.78, 1, p)
+        let e = 1 - (1 - p) * (1 - p)                   // ease-out
+        f.softBlur = Ease.smoothstep(0, 0.12, p)       // frosting is visible right away
+        f.heavyBlur = Ease.smoothstep(0.05, 0.6, p)
+        f.blurFront = 1.15 - 1.45 * e                  // reaches the hinge around p ≈ 0.75
+        f.darkFront = 1.5 - 1.6 * pow(p, 1.3)          // black creeps down, hinge last
+        f.vignette = 0.06 + 2.3 * pow(1 - p, 1.4)      // light pools into the hinge
+        f.shade = Ease.smoothstep(0.15, 1, p)
+        f.frost = 0.10 * Ease.bump(p, peak: 0.35)
+        f.sheen = 0.22 * Ease.bump(p, peak: 0.35)      // faint glassy glow riding the blur front
+        f.sheenPosition = f.blurFront
+        f.panelOpacity = 1 - Ease.smoothstep(0.93, 1, p)
         return f
     }
 

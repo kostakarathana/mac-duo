@@ -185,7 +185,7 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
       <div class="card">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18h16M6 18l2-11h8l2 11"/></svg></div>
         <h3>Follows your lid in real time</h3>
-        <p>Mac Duo reads the hinge sensor built into your MacBook 60 times a second. The fold tracks your hand, and it reverses if you change your mind.</p>
+        <p>Mac Duo reads the hinge sensor built into your MacBook 60 times a second. The fold starts early and tracks your hand, and if you pause it stays put until you touch your Mac.</p>
       </div>
       <div class="card">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg></div>
@@ -202,29 +202,29 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
 
   <section id="how">
     <h2>Closing vs. adjusting</h2>
-    <p class="sub">Every reading from the hinge sensor goes through a small state machine. A fold only starts when all of these hold:</p>
+    <p class="sub">Every reading from the hinge sensor goes through a small state machine. A fold starts only when all of these hold:</p>
     <div class="split">
       <div>
-        <div class="rule"><span class="n">1</span><div><b>It's below an angle nobody works at.</b><p>The fold can't start above 55°. People type and watch at roughly 80–135°.</p></div></div>
-        <div class="rule"><span class="n">2</span><div><b>It's moving shut quickly.</b><p>At least 45°/s, measured with a least-squares slope so sensor jitter can't fake it.</p></div></div>
-        <div class="rule"><span class="n">3</span><div><b>It's a big drop.</b><p>At least 25° below where the lid was in the last 1.5 seconds.</p></div></div>
-        <div class="rule"><span class="n">4</span><div><b>And it keeps going.</b><p>Stop halfway for a second, or open the lid again, and the fold smoothly reverses. Slow, careful closers are covered too: below 32° any steady downward motion counts.</p></div></div>
+        <div class="rule"><span class="n">1</span><div><b>The lid is heading down past 85°.</b><p>That's early enough that the fold plays across almost the whole close.</p></div></div>
+        <div class="rule"><span class="n">2</span><div><b>It's moving shut quickly.</b><p>At least 60°/s, measured with a least-squares slope so sensor jitter can't fake it. Ordinary tilts are much slower than that.</p></div></div>
+        <div class="rule"><span class="n">3</span><div><b>It's a big drop.</b><p>At least 22° below where the lid was in the last 1.5 seconds.</p></div></div>
+        <div class="rule"><span class="n">4</span><div><b>Then it holds until you touch your Mac.</b><p>Pause halfway and the fold waits right where it is. Move the trackpad, click or press a key and it unfolds back to your desktop. Slow, careful closers are covered too: below 40° any steady downward motion counts.</p></div></div>
       </div>
       <div class="chart" aria-label="Chart of lid angle over time for a screen adjustment versus a real close">
         <svg viewBox="0 0 420 260" role="img">
           <g stroke="rgba(255,255,255,.08)" stroke-width="1">
             <line x1="40" y1="20" x2="40" y2="220"/><line x1="40" y1="220" x2="410" y2="220"/>
-            <line x1="40" y1="120" x2="410" y2="120" stroke-dasharray="4 4" stroke="rgba(255,122,168,.45)"/>
+            <line x1="40" y1="78" x2="410" y2="78" stroke-dasharray="4 4" stroke="rgba(255,122,168,.45)"/>
           </g>
           <g fill="#9aa0b4" font-size="11" font-family="Inter, sans-serif">
-            <text x="8" y="24">120°</text><text x="14" y="124">55°</text><text x="20" y="223">0°</text>
-            <text x="330" y="114" fill="#ff9dbf">fold zone ↓</text>
+            <text x="8" y="24">120°</text><text x="14" y="82">85°</text><text x="20" y="223">0°</text>
+            <text x="330" y="96" fill="#ff9dbf">fold zone ↓</text>
             <text x="350" y="240">time →</text>
           </g>
-          <path d="M40 40 C 90 40, 110 75, 140 78 S 200 76, 230 60 S 300 50, 410 52" fill="none" stroke="#8de0ff" stroke-width="3" stroke-linecap="round"/>
+          <path d="M40 40 C 90 40, 110 62, 140 64 S 200 62, 230 52 S 300 46, 410 48" fill="none" stroke="#8de0ff" stroke-width="3" stroke-linecap="round"/>
           <path d="M40 48 L 180 48 C 210 48, 230 120, 250 180 S 270 218, 290 218 L 410 218" fill="none" stroke="#b7a6ff" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="232" cy="120" r="5" fill="#ff7aa8"/>
-          <text x="240" y="140" fill="#ff9dbf" font-size="11" font-family="Inter, sans-serif">fold starts</text>
+          <circle cx="203" cy="78" r="5" fill="#ff7aa8"/>
+          <text x="212" y="100" fill="#ff9dbf" font-size="11" font-family="Inter, sans-serif">fold starts</text>
         </svg>
         <div class="legend"><span><i style="background:#8de0ff"></i>Adjusting the screen: ignored</span><span><i style="background:#b7a6ff"></i>Closing the lid: folds</span></div>
       </div>
@@ -249,7 +249,7 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
   <section id="faq">
     <h2>Questions</h2>
     <details><summary>Which Macs does it work on?</summary><p>The lid fold needs a MacBook with a lid angle sensor. That covers most Apple silicon MacBook Air and MacBook Pro models, plus the 16-inch MacBook Pro from 2019. Mac Duo checks for the sensor when it launches and tells you if your Mac doesn't have one. The glossy power-off fade works on any Mac running macOS 14 or later.</p></details>
-    <details><summary>Will it fold when I just tilt my screen?</summary><p>No. Readjustments are small, slow, or stop well above 55°. A fold needs a fast, large drop into the low angles where nobody uses a screen. If it still starts, for example because you dipped the lid fast and then stopped, it reverses within a second. Choose <em>Strict</em> in the menu to be even pickier, or <em>Relaxed</em> to fold earlier.</p></details>
+    <details><summary>Will it fold when I just tilt my screen?</summary><p>No. Readjustments are small or slow. A fold needs a fast (60°/s+), large drop that's already heading below 85°. If it ever starts by mistake, for example because you dipped the lid fast and then stopped, touch the trackpad and it unfolds. Choose <em>Strict</em> in the menu to be even pickier, or <em>Relaxed</em> to fold earlier.</p></details>
     <details><summary>Why does it want Screen Recording?</summary><p>To bend your actual desktop, Mac Duo grabs a single frame the moment your lid starts moving fast. The frame stays in memory, gets replaced the next time, and is never written to disk or sent anywhere. Without this permission Mac Duo uses a frosted-glass blur over the live screen, which still looks good.</p></details>
     <details><summary>Does it change how my Mac sleeps or shuts down?</summary><p>No. macOS still sleeps when the lid closes and still powers off when you hold the button. Mac Duo only draws on top during those moments. For a menu-bar Shut Down or Restart, it delays the app's own exit by about a second and a half so the fade can finish.</p></details>
     <details><summary>Does it drain my battery?</summary><p>Hardly. While the lid sits still, it reads the hinge 15 times a second. That rises to 60 only while the lid is moving, and frames are drawn only during an animation.</p></details>

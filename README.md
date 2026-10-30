@@ -13,8 +13,9 @@
 
 ## What it does
 
-- **Lid fold.** As the lid closes, your desktop tilts into the hinge. It stays sharp at the hinge, frosts over toward the top edge, dims and disappears. The animation follows the real hinge angle at 60 Hz, so it moves with your hand and reverses if you open the lid again.
-- **Readjustments are ignored.** A fold only starts when the lid is **below 55°**, **closing faster than 45°/s**, and has **dropped at least 25°** in the last 1.5 s. A slow, steady close below 32° also counts. If you stop halfway, the fold reverses after a second. You can pick Relaxed, Normal or Strict detection from the menu.
+- **Lid fold.** As the lid closes, your desktop frosts over from the top edge down, darkens, and its light pools into the hinge until it's gone. The screen doesn't move or shrink; it's all soft gradients. The animation follows the real hinge angle at 60 Hz, so it moves with your hand.
+- **Readjustments are ignored.** A fold starts early, once the lid is **below 85°**, but only when it's **closing faster than 60°/s** and has **dropped at least 22°** in the last 1.5 s. A slow, steady close below 40° also counts. You can pick Relaxed, Normal or Strict detection from the menu.
+- **It stays until you touch your Mac.** Once a fold starts it never reverses on its own: pause halfway and it waits. Move the trackpad, click or press a key and it unfolds back to your desktop. After a full close, opening the lid unfolds it.
 - **Glossy power-off fade.** Holding the power button (1.2 s by default) plays a specular sweep: the screen frosts, recedes like a pane of glass and fades to black. A quick tap (lock/sleep) does nothing. It also plays on menu-bar Shut Down and Restart.
 
 ## Install
@@ -42,7 +43,7 @@ Developer commands:
 
 ```sh
 MacDuo --trace 10                               # live hinge angle + detector state
-MacDuo --simulate close|cancel|adjust|reopen    # scripted lid motion through the real app
+MacDuo --simulate close|hold|dismiss|adjust|reopen   # scripted lid motion through the real app
 MacDuo --demo fold|fade                         # play an animation once
 MacDuo --render fold|fade desk.png out/ 30      # render frames offscreen
 ```
@@ -57,7 +58,7 @@ MacDuo --render fold|fade desk.png out/ 30      # render frames offscreen
 | `Sources/App/PowerButtonMonitor.swift` | Power key via event tap + consumer-control HID |
 | `Sources/App/DuoOverlay.swift` | Overlay window and the Core Animation layer stack |
 | `Sources/App/AppDelegate.swift` | Menu bar app, settings, sleep/wake and shutdown handling |
-| `Tests/main.swift` | 24 scenario tests: real closes, slams, slow closes, readjustments, wobbles, change of mind |
+| `Tests/main.swift` | 30 scenario tests: real closes, slams, slow closes, readjustments, wobbles, holding, dismissal |
 | `docs/` | The GitHub Pages website |
 
 ## License

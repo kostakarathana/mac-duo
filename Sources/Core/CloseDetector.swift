@@ -2,23 +2,21 @@ import Foundation
 
 /// Tuning for telling a real lid close apart from an ordinary screen readjustment.
 ///
-/// A readjustment is a small and/or slow change in angle that settles somewhere a person
-/// would actually look at the screen (roughly 70°–135°). A close is a fast, large,
-/// continuous drop that heads below an angle nobody types at.
+/// A readjustment is a small and/or slow change in angle. A close is a fast, large,
+/// continuous drop. Because a started fold holds until the user touches the Mac, the
+/// gate leans on speed and distance rather than waiting for a very low angle.
 public struct DetectorConfig: Equatable, Sendable {
     /// The fold may only begin once the lid is below this angle (degrees).
-    public var triggerAngle: Double = 55
+    public var triggerAngle: Double = 85
     /// The lid must be moving shut at least this fast (degrees / second).
-    public var minClosingSpeed: Double = 45
+    public var minClosingSpeed: Double = 60
     /// The lid must have dropped at least this far from its recent peak.
-    public var minDrop: Double = 25
+    public var minDrop: Double = 22
     /// How far back "recent peak" looks (seconds).
     public var dropWindow: TimeInterval = 1.5
     /// At or below this angle the lid counts as shut.
     public var closedAngle: Double = 6
-    /// Opening this far past where the fold started cancels it.
-    public var reopenMargin: Double = 8
-    /// If a fold stops making progress for this long (and isn't nearly shut), cancel it.
+    /// If an unfold (lid reopening after a close) stops moving for this long, finish it.
     public var stallTimeout: TimeInterval = 1.0
     /// Below this speed the lid counts as "not moving".
     public var stallSpeed: Double = 6
@@ -26,7 +24,7 @@ public struct DetectorConfig: Equatable, Sendable {
     public var prearmSpeed: Double = 25
     /// Careful, slow closers: below this angle nobody is using the screen, so a
     /// steady downward motion is enough on its own.
-    public var deepAngle: Double = 32
+    public var deepAngle: Double = 40
     public var deepSpeed: Double = 12
 
     public init() {}
@@ -38,9 +36,9 @@ public struct DetectorConfig: Equatable, Sendable {
     public static func preset(_ s: Sensitivity) -> DetectorConfig {
         var c = DetectorConfig()
         switch s {
-        case .relaxed: c.triggerAngle = 65; c.minClosingSpeed = 35; c.minDrop = 20
+        case .relaxed: c.triggerAngle = 95; c.minClosingSpeed = 45; c.minDrop = 18
         case .normal: break
-        case .strict: c.triggerAngle = 45; c.minClosingSpeed = 60; c.minDrop = 35
+        case .strict: c.triggerAngle = 70; c.minClosingSpeed = 80; c.minDrop = 30
         }
         return c
     }
@@ -51,8 +49,6 @@ public enum DetectorEvent: Equatable, Sendable {
     case prearm
     /// A real close was recognised; the fold animation starts at this angle.
     case beginFold(startAngle: Double)
-    /// The close was abandoned (lid reopened or stopped mid-way).
-    case cancel
     /// The lid reached the closed angle.
     case closed
     /// The lid is opening again after being closed.
@@ -81,7 +77,6 @@ public struct CloseDetector: Sendable {
     private var samples: [(t: TimeInterval, a: Double)] = []
     private var lastPrearm: TimeInterval = -.infinity
     private var lastAdvance: TimeInterval = 0
-    private var bestProgress: Double = 0
 
     public init(config: DetectorConfig = DetectorConfig()) {
         self.config = config
@@ -90,6 +85,12 @@ public struct CloseDetector: Sendable {
     public var isActive: Bool { state != .idle }
 
     public mutating func reset() {
+        state = .idle; progress = 0; samples.removeAll(); velocity = 0
+    }
+
+    /// The user touched the Mac (trackpad, click, key): drop the fold without waiting for the lid.
+    public mutating func dismiss() {
+        // Forget the motion that triggered it, or the same drop would re-trigger instantly.
         state = .idle; progress = 0; samples.removeAll(); velocity = 0
     }
 
@@ -122,8 +123,6 @@ public struct CloseDetector: Sendable {
             if (fastEnough && lowEnough && farEnough) || deep || slammed {
                 let start = a
                 state = .folding(start: start)
-                lastAdvance = t
-                bestProgress = 0
                 events.append(.beginFold(startAngle: start))
                 if a <= c.closedAngle {
                     state = .closed(start: start); progress = 1
@@ -134,20 +133,12 @@ public struct CloseDetector: Sendable {
             }
 
         case .folding(let start):
-            progress = Self.progress(a, start: start, closed: c.closedAngle)
-            if progress > bestProgress + 0.01 || velocity < -c.stallSpeed {
-                bestProgress = max(bestProgress, progress)
-                lastAdvance = t
-            }
+            // Only ever moves forward: pausing or easing the lid back up holds the fold
+            // where it is. The app dismisses it when the user touches the Mac.
+            progress = max(progress, Self.progress(a, start: start, closed: c.closedAngle))
             if a <= c.closedAngle {
                 state = .closed(start: start); progress = 1
                 events.append(.closed)
-            } else if a >= start + c.reopenMargin {
-                state = .idle; progress = 0
-                events.append(.cancel)
-            } else if t - lastAdvance > c.stallTimeout, a > c.closedAngle + 10 {
-                state = .idle; progress = 0
-                events.append(.cancel)
             }
 
         case .closed(let start):

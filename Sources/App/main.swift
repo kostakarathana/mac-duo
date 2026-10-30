@@ -36,15 +36,21 @@ let delegate = AppDelegate()
 if let i = args.firstIndex(of: "--demo"), args.count > i + 1 {
     delegate.demo = args[i + 1] == "fade" ? .fade : .fold
 }
-//   MacDuo --simulate close|cancel|adjust|reopen    scripted lid motion through the real app
+//   MacDuo --simulate close|hold|dismiss|adjust|reopen    scripted lid motion through the real app
 if let i = args.firstIndex(of: "--simulate"), args.count > i + 1 {
     let traces: [String: [(t: Double, a: Double)]] = [
         "close": [(0, 110), (0.3, 110), (1.1, 0), (1.6, 0)],
-        "cancel": [(0, 110), (0.3, 110), (0.8, 30), (1.3, 110), (1.8, 110)],
+        "hold": [(0, 110), (0.3, 110), (0.7, 45), (2.5, 45)],
+        "dismiss": [(0, 110), (0.3, 110), (0.7, 45), (2.5, 45)],
         "adjust": [(0, 120), (0.3, 120), (0.6, 90), (1.5, 90), (1.9, 125), (2.5, 125)],
         "reopen": [(0, 110), (0.3, 110), (1.1, 0), (1.8, 0), (2.6, 110), (3.0, 110)],
     ]
-    delegate.simulated = traces[args[i + 1]]
+    guard let trace = traces[args[i + 1]] else {
+        print("unknown scenario; use one of: \(traces.keys.sorted().joined(separator: ", "))"); exit(2)
+    }
+    delegate.simulated = trace
+    // Only "dismiss" scripts a touch; the others ignore real input so results are repeatable.
+    delegate.simulatedInputAt = args[i + 1] == "dismiss" ? 1.4 : .infinity
 }
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
