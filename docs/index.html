@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mac Duo — fold your MacBook screen away</title>
+<meta name="description" content="A free menu-bar app that makes your MacBook screen fold away like iPhone Duo when you close the lid, and fade out with a glossy sheen when you hold the power button.">
+<meta property="og:title" content="Mac Duo">
+<meta property="og:description" content="Close your MacBook and the screen folds away like iPhone Duo.">
+<meta property="og:image" content="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07080d;
+  --bg2: #0e1018;
+  --card: rgba(255,255,255,0.045);
+  --line: rgba(255,255,255,0.09);
+  --text: #f2f3f8;
+  --muted: #9aa0b4;
+  --accent: #8b6cff;
+  --accent2: #ff7aa8;
+  --radius: 22px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; line-height: 1.55; overflow-x: hidden;
+}
+a { color: inherit; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.glow {
+  position: absolute; inset: -20% -10% auto; height: 900px; pointer-events: none; z-index: 0;
+  background: radial-gradient(40% 50% at 30% 30%, rgba(139,108,255,.28), transparent 70%),
+              radial-gradient(35% 45% at 75% 25%, rgba(255,122,168,.18), transparent 70%);
+  filter: blur(20px);
+}
+nav { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+nav .links { display: flex; gap: 22px; font-size: 14px; color: var(--muted); }
+nav .links a { text-decoration: none; }
+nav .links a:hover { color: var(--text); }
+
+header { position: relative; z-index: 1; text-align: center; padding: 56px 0 24px; }
+.pill { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted);
+  border: 1px solid var(--line); background: var(--card); padding: 6px 14px; border-radius: 99px; backdrop-filter: blur(10px); }
+.pill b { color: var(--text); font-weight: 600; }
+h1 { font-size: clamp(38px, 7vw, 76px); line-height: 1.02; letter-spacing: -0.035em; margin: 22px auto 18px; max-width: 900px; font-weight: 800; }
+h1 .grad { background: linear-gradient(100deg, #b7a6ff, #8b6cff 35%, #ff7aa8 80%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 14px; font-weight: 600; font-size: 16px; text-decoration: none; transition: transform .15s, box-shadow .15s, background .15s; }
+.btn.primary { background: linear-gradient(180deg, #fff, #dcdcf0); color: #0b0b12; box-shadow: 0 10px 40px rgba(139,108,255,.35), inset 0 1px 0 rgba(255,255,255,.8); }
+.btn.primary:hover { transform: translateY(-2px); box-shadow: 0 16px 50px rgba(139,108,255,.5); }
+.btn.ghost { border: 1px solid var(--line); background: var(--card); }
+.btn.ghost:hover { background: rgba(255,255,255,.08); }
+.btn svg { width: 18px; height: 18px; }
+.meta { margin-top: 14px; font-size: 13px; color: var(--muted); }
+
+/* Demo */
+.demo { position: relative; z-index: 1; margin: 56px auto 0; max-width: 900px; }
+.tabs { display: flex; justify-content: center; gap: 6px; margin-bottom: 22px; }
+.tab { border: 1px solid var(--line); background: var(--card); color: var(--muted); padding: 9px 18px; border-radius: 99px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+.tab[aria-selected="true"] { background: #fff; color: #0b0b12; border-color: #fff; }
+.laptop { position: relative; margin: 0 auto; width: 100%; }
+.lid { position: relative; background: #1b1c22; border-radius: 18px 18px 6px 6px; padding: 2.2% 2.2% 3%; box-shadow: 0 0 0 1.5px #34353d inset, 0 40px 120px rgba(0,0,0,.6); }
+.screen { position: relative; aspect-ratio: 1512 / 982; background: #000; border-radius: 6px; overflow: hidden; }
+.screen canvas { width: 100%; height: 100%; display: block; }
+.notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 12%; height: 3.2%; background: #1b1c22; border-radius: 0 0 8px 8px; z-index: 2; }
+.base { height: 16px; margin: 0 -6%; background: linear-gradient(180deg, #c9cad2, #8d8f99 60%, #5c5e66); border-radius: 0 0 22px 22px; position: relative; }
+.base::before { content: ""; position: absolute; left: 50%; top: 0; transform: translateX(-50%); width: 14%; height: 6px; background: #6f717a; border-radius: 0 0 8px 8px; }
+.controls { display: flex; align-items: center; gap: 16px; margin: 26px auto 0; max-width: 560px; padding: 14px 18px; border: 1px solid var(--line); background: var(--card); border-radius: 16px; backdrop-filter: blur(12px); }
+.controls button { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; color: #000; cursor: pointer; display: grid; place-items: center; }
+.controls button svg { width: 16px; height: 16px; }
+.controls label { font-size: 13px; color: var(--muted); white-space: nowrap; min-width: 92px; }
+.controls output { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.caption { text-align: center; color: var(--muted); font-size: 13px; margin-top: 12px; }
+
+section { position: relative; z-index: 1; padding: 96px 0 0; }
+h2 { font-size: clamp(28px, 4.2vw, 44px); letter-spacing: -0.025em; line-height: 1.1; margin: 0 0 14px; font-weight: 800; }
+.sub { color: var(--muted); font-size: 18px; max-width: 640px; margin: 0 0 40px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
+.card { border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); border-radius: var(--radius); padding: 26px; position: relative; overflow: hidden; }
+.card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.06) 45%, transparent 60%); pointer-events: none; }
+.card h3 { margin: 14px 0 8px; font-size: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(139,108,255,.16); color: #c4b6ff; }
+.icon svg { width: 22px; height: 22px; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rule { display: flex; gap: 14px; padding: 18px 0; border-top: 1px solid var(--line); }
+.rule:first-child { border-top: 0; padding-top: 0; }
+.rule .n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,.08); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.rule p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+.rule b { color: var(--text); }
+.chart { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg2); padding: 22px; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.chart .legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+
+ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); }
+ol.steps li { counter-increment: s; border: 1px solid var(--line); background: var(--card); border-radius: 18px; padding: 22px 22px 22px 70px; position: relative; color: var(--muted); font-size: 15px; }
+ol.steps li::before { content: counter(s); position: absolute; left: 22px; top: 20px; width: 32px; height: 32px; border-radius: 10px; background: #fff; color: #000; font-weight: 800; display: grid; place-items: center; }
+ol.steps li b { color: var(--text); display: block; margin-bottom: 4px; font-size: 16px; }
+code, pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 6px; color: var(--text); }
+pre { background: #000; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; overflow-x: auto; color: #d8d8e8; margin: 10px 0 0; }
+.note { margin-top: 18px; border: 1px solid rgba(255,196,0,.25); background: rgba(255,196,0,.06); border-radius: 16px; padding: 16px 20px; color: #e9dcb0; font-size: 14px; }
+
+details { border-top: 1px solid var(--line); padding: 18px 0; }
+details:last-of-type { border-bottom: 1px solid var(--line); }
+summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 20px; line-height: 1; }
+details[open] summary::after { content: "–"; }
+details p { color: var(--muted); margin: 10px 0 0; font-size: 15px; max-width: 760px; }
+
+footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+@media (max-width: 820px) {
+  .grid, .split, ol.steps { grid-template-columns: 1fr; }
+  nav .links a:not(.gh) { display: none; }
+  section { padding-top: 72px; }
+  .controls { gap: 10px; }
+  .controls label { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .btn, .btn:hover { transition: none; transform: none; } }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#"><img src="icon.png" alt="">Mac Duo</a>
+    <div class="links">
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/kostakarathana/mac-duo">GitHub</a>
+    </div>
+  </nav>
+
+  <header>
+    <span class="pill"><b>New</b> Free · open source · v<span class="ver">1.0.0</span></span>
+    <h1>Close your MacBook<br>like it's an <span class="grad">iPhone Duo</span>.</h1>
+    <p class="lede">As the lid comes down, your desktop bends into the hinge, frosts over like glass and folds away. Hold the power button and it fades out with a glossy sheen instead of just cutting to black.</p>
+    <div class="cta">
+      <a class="btn primary" id="download" href="https://github.com/kostakarathana/mac-duo/releases/latest/download/MacDuo.dmg">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.86-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.33-3.5zM14.2 6.1c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.65-1.05 1.68-.92 2.67.97.08 1.96-.49 2.56-1.22z"/></svg>
+        Download for Mac
+      </a>
+      <a class="btn ghost" href="https://github.com/kostakarathana/mac-duo">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+        Source on GitHub
+      </a>
+    </div>
+    <p class="meta">macOS 14 Sonoma or later · Apple silicon &amp; Intel · ~1 MB</p>
+  </header>
+
+  <div class="demo">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-mode="fold">Closing the lid</button>
+      <button class="tab" role="tab" aria-selected="false" data-mode="fade">Holding power</button>
+    </div>
+    <div class="laptop">
+      <div class="lid"><div class="screen"><div class="notch"></div><canvas id="cv" width="960" height="623"></canvas></div></div>
+      <div class="base"></div>
+    </div>
+    <div class="controls">
+      <button id="play" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg></button>
+      <label for="scrub" id="scrubLabel">Lid angle <output id="val">110°</output></label>
+      <input id="scrub" type="range" min="0" max="29" value="0" aria-labelledby="scrubLabel">
+    </div>
+    <p class="caption" id="cap">Drag the slider to close the lid. These are real frames rendered by the app.</p>
+  </div>
+
+  <section id="features">
+    <h2>Two small moments, made beautiful.</h2>
+    <p class="sub">Mac Duo lives in your menu bar, uses almost no power, and stays out of the way until the moment it matters.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18h16M6 18l2-11h8l2 11"/></svg></div>
+        <h3>Follows your lid in real time</h3>
+        <p>Mac Duo reads the hinge sensor built into your MacBook 60 times a second. The fold tracks your hand, and it reverses if you change your mind.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg></div>
+        <h3>Ignores screen adjustments</h3>
+        <p>Tilting the screen to cut glare or get a better angle never sets it off. It only folds for a real close, judged by speed, distance and angle.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 7.2a8 8 0 1 0 11.4 0"/></svg></div>
+        <h3>Glossy power-off fade</h3>
+        <p>Hold the power button and a specular sheen sweeps across your screen. It frosts, recedes like a pane of glass and fades to black. It also plays on Shut Down and Restart.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>Closing vs. adjusting</h2>
+    <p class="sub">Every reading from the hinge sensor goes through a small state machine. A fold only starts when all of these hold:</p>
+    <div class="split">
+      <div>
+        <div class="rule"><span class="n">1</span><div><b>It's below an angle nobody works at.</b><p>The fold can't start above 55°. People type and watch at roughly 80–135°.</p></div></div>
+        <div class="rule"><span class="n">2</span><div><b>It's moving shut quickly.</b><p>At least 45°/s, measured with a least-squares slope so sensor jitter can't fake it.</p></div></div>
+        <div class="rule"><span class="n">3</span><div><b>It's a big drop.</b><p>At least 25° below where the lid was in the last 1.5 seconds.</p></div></div>
+        <div class="rule"><span class="n">4</span><div><b>And it keeps going.</b><p>Stop halfway for a second, or open the lid again, and the fold smoothly reverses. Slow, careful closers are covered too: below 32° any steady downward motion counts.</p></div></div>
+      </div>
+      <div class="chart" aria-label="Chart of lid angle over time for a screen adjustment versus a real close">
+        <svg viewBox="0 0 420 260" role="img">
+          <g stroke="rgba(255,255,255,.08)" stroke-width="1">
+            <line x1="40" y1="20" x2="40" y2="220"/><line x1="40" y1="220" x2="410" y2="220"/>
+            <line x1="40" y1="120" x2="410" y2="120" stroke-dasharray="4 4" stroke="rgba(255,122,168,.45)"/>
+          </g>
+          <g fill="#9aa0b4" font-size="11" font-family="Inter, sans-serif">
+            <text x="8" y="24">120°</text><text x="14" y="124">55°</text><text x="20" y="223">0°</text>
+            <text x="330" y="114" fill="#ff9dbf">fold zone ↓</text>
+            <text x="350" y="240">time →</text>
+          </g>
+          <path d="M40 40 C 90 40, 110 75, 140 78 S 200 76, 230 60 S 300 50, 410 52" fill="none" stroke="#8de0ff" stroke-width="3" stroke-linecap="round"/>
+          <path d="M40 48 L 180 48 C 210 48, 230 120, 250 180 S 270 218, 290 218 L 410 218" fill="none" stroke="#b7a6ff" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="232" cy="120" r="5" fill="#ff7aa8"/>
+          <text x="240" y="140" fill="#ff9dbf" font-size="11" font-family="Inter, sans-serif">fold starts</text>
+        </svg>
+        <div class="legend"><span><i style="background:#8de0ff"></i>Adjusting the screen: ignored</span><span><i style="background:#b7a6ff"></i>Closing the lid: folds</span></div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:28px">The power-off fade works the same way. A quick tap of the power button (lock or sleep) does nothing. It only plays when you hold the button. If the Mac stays on, the screen fades back.</p>
+  </section>
+
+  <section id="install">
+    <h2>Install in a minute</h2>
+    <p class="sub">Mac Duo is free and open source. It isn't notarized by Apple, so macOS asks you to confirm the first time you open it.</p>
+    <ol class="steps">
+      <li><b>Download &amp; drag to Applications</b>Open <code>MacDuo.dmg</code> and drag <em>Mac Duo</em> onto the Applications folder.</li>
+      <li><b>Open it once</b>Double-click Mac Duo. If macOS says it can't verify the developer, click <em>Done</em>, then go to <em>System Settings → Privacy &amp; Security</em> and click <em>Open Anyway</em>.</li>
+      <li><b>Grant two optional permissions</b><em>Screen Recording</em> lets the fold show your real desktop (one frame, kept in memory, never saved). <em>Input Monitoring</em> lets the app notice you holding the power button.</li>
+      <li><b>Close your lid</b>That's it. The laptop icon in the menu bar has previews, sensitivity settings and Open at Login.</li>
+    </ol>
+    <div class="note">Prefer the Terminal? This removes the download quarantine flag in one step:
+      <pre>xattr -dr com.apple.quarantine "/Applications/Mac Duo.app"</pre>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>Questions</h2>
+    <details><summary>Which Macs does it work on?</summary><p>The lid fold needs a MacBook with a lid angle sensor. That covers most Apple silicon MacBook Air and MacBook Pro models, plus the 16-inch MacBook Pro from 2019. Mac Duo checks for the sensor when it launches and tells you if your Mac doesn't have one. The glossy power-off fade works on any Mac running macOS 14 or later.</p></details>
+    <details><summary>Will it fold when I just tilt my screen?</summary><p>No. Readjustments are small, slow, or stop well above 55°. A fold needs a fast, large drop into the low angles where nobody uses a screen. If it still starts, for example because you dipped the lid fast and then stopped, it reverses within a second. Choose <em>Strict</em> in the menu to be even pickier, or <em>Relaxed</em> to fold earlier.</p></details>
+    <details><summary>Why does it want Screen Recording?</summary><p>To bend your actual desktop, Mac Duo grabs a single frame the moment your lid starts moving fast. The frame stays in memory, gets replaced the next time, and is never written to disk or sent anywhere. Without this permission Mac Duo uses a frosted-glass blur over the live screen, which still looks good.</p></details>
+    <details><summary>Does it change how my Mac sleeps or shuts down?</summary><p>No. macOS still sleeps when the lid closes and still powers off when you hold the button. Mac Duo only draws on top during those moments. For a menu-bar Shut Down or Restart, it delays the app's own exit by about a second and a half so the fade can finish.</p></details>
+    <details><summary>Does it drain my battery?</summary><p>Hardly. While the lid sits still, it reads the hinge 15 times a second. That rises to 60 only while the lid is moving, and frames are drawn only during an animation.</p></details>
+    <details><summary>Is this affiliated with Apple?</summary><p>No. Mac Duo is an independent fan project inspired by the iPhone Duo's fold animation. It isn't affiliated with or endorsed by Apple.</p></details>
+  </section>
+
+  <footer>
+    <span>Mac Duo · MIT License · Made by <a href="https://github.com/kostakarathana">@kostakarathana</a></span>
+    <span><a href="https://github.com/kostakarathana/mac-duo/releases">All releases</a> · <a href="https://github.com/kostakarathana/mac-duo/issues">Report an issue</a></span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const N = 30;
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const scrub = document.getElementById('scrub'), val = document.getElementById('val');
+  const label = document.getElementById('scrubLabel'), cap = document.getElementById('cap');
+  const playBtn = document.getElementById('play');
+  const sets = { fold: [], fade: [] };
+  let mode = 'fold', raf = null;
+
+  for (const m of Object.keys(sets)) {
+    for (let i = 0; i < N; i++) {
+      const img = new Image();
+      img.src = `frames/${m}/frame_${String(i).padStart(3, '0')}.jpg`;
+      if (m === 'fold' && i === 0) img.onload = () => draw(0);
+      sets[m].push(img);
+    }
+  }
+
+  function draw(i) {
+    const img = sets[mode][Math.round(i)];
+    if (!img || !img.complete) return;
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  }
+
+  function setFrame(i) {
+    scrub.value = i;
+    if (mode === 'fold') val.textContent = Math.round(110 - (110 * i) / (N - 1)) + '°';
+    else val.textContent = Math.round((i / (N - 1)) * 100) + '%';
+    draw(i);
+  }
+
+  scrub.addEventListener('input', () => { stop(); setFrame(+scrub.value); });
+
+  function stop() { if (raf) cancelAnimationFrame(raf); raf = null; }
+
+  function play() {
+    stop();
+    const t0 = performance.now();
+    // Fold: close, pause, reopen. Fade: fade out, pause, back to the start.
+    const dur = mode === 'fold' ? [1100, 600, 1000] : [1400, 700, 0];
+    const total = dur[0] + dur[1] + dur[2];
+    const ease = x => x * x * (3 - 2 * x);
+    const step = now => {
+      const t = now - t0;
+      let p;
+      if (t < dur[0]) p = ease(t / dur[0]);
+      else if (t < dur[0] + dur[1]) p = 1;
+      else if (dur[2]) p = 1 - ease(Math.min(1, (t - dur[0] - dur[1]) / dur[2]));
+      else p = 0;
+      setFrame(p * (N - 1));
+      if (t < total) raf = requestAnimationFrame(step); else { raf = null; setFrame(0); }
+    };
+    raf = requestAnimationFrame(step);
+  }
+  playBtn.addEventListener('click', play);
+
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t === tab));
+    mode = tab.dataset.mode;
+    stop();
+    label.firstChild.textContent = mode === 'fold' ? 'Lid angle ' : 'Power held ';
+    cap.textContent = mode === 'fold'
+      ? 'Drag the slider to close the lid. These are real frames rendered by the app.'
+      : 'Hold the power button and the screen glazes over, recedes and fades out. Press play.';
+    setFrame(0);
+    if (mode === 'fade') play();
+  }));
+
+  // Play the fold once when the demo first scrolls into view.
+  const io = new IntersectionObserver(es => {
+    if (es.some(e => e.isIntersecting)) { io.disconnect(); setTimeout(play, 400); }
+  }, { threshold: 0.6 });
+  io.observe(cv);
+
+  // Show the latest released version number.
+  fetch('https://api.github.com/repos/kostakarathana/mac-duo/releases/latest')
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.tag_name) document.querySelectorAll('.ver').forEach(e => e.textContent = j.tag_name.replace(/^v/, '')); })
+    .catch(() => {});
+})();
+</script>
+</body>
+</html>
