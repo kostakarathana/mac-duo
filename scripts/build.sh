@@ -32,7 +32,11 @@ iconutil -c icns "$OUT/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns
 cp "$OUT/AppIcon.iconset/icon_512x512@2x.png" "$OUT/icon.png"
 
 echo "▸ Sign ($SIGN_ID)"
-codesign --force --deep --options runtime --timestamp=none --sign "$SIGN_ID" "$APP"
+# Ad-hoc signatures change with every build, which would make macOS forget the Screen
+# Recording grant on each update; pin the designated requirement to the bundle id instead.
+REQ=()
+[ "$SIGN_ID" = "-" ] && REQ=(--requirements '=designated => identifier "io.github.kostakarathana.macduo"')
+codesign --force --deep --options runtime --timestamp=none "${REQ[@]}" --sign "$SIGN_ID" "$APP"
 codesign --verify --strict --verbose=2 "$APP"
 
 echo "▸ DMG"

@@ -13,9 +13,9 @@
 
 ## What it does
 
-- **Lid fold.** As the lid closes, your desktop frosts over from the top edge down, darkens, and its light pools into the hinge until it's gone. The screen doesn't move or shrink; it's all soft gradients. The animation follows the real hinge angle at 60 Hz, so it moves with your hand.
+- **Lid fold.** As the lid closes, a progressive blur rises from the hinge to the top edge, strongest near the hinge with no hard line, then the screen dims away. Opening the lid, or touching the trackpad or keyboard, plays it in reverse: the blur clears from the top back down. The screen never moves or shrinks. The animation follows the real hinge angle at 60 Hz, so it moves with your hand.
 - **Readjustments are ignored.** A fold starts early, once the lid is **below 85°**, but only when it's **closing faster than 60°/s** and has **dropped at least 22°** in the last 1.5 s. A slow, steady close below 40° also counts. You can pick Relaxed, Normal or Strict detection from the menu.
-- **It stays until you touch your Mac.** Once a fold starts it never reverses on its own: pause halfway and it waits. Move the trackpad, click or press a key and it unfolds back to your desktop. After a full close, opening the lid unfolds it.
+- **Pause and it waits; lift the lid and it's gone.** Pause halfway and the fold holds where it is. Lift the lid back up, or move the trackpad, click or press a key, and the blur clears from the top down in under half a second.
 - **Glossy power-off fade.** Holding the power button (1.2 s by default) plays a specular sweep: the screen frosts, recedes like a pane of glass and fades to black. A quick tap (lock/sleep) does nothing. It also plays on menu-bar Shut Down and Restart.
 
 ## Install
@@ -26,7 +26,7 @@
    xattr -dr com.apple.quarantine "/Applications/Mac Duo.app"
    ```
 3. Grant the optional permissions when asked:
-   - **Screen Recording**: lets the fold show your real desktop. One frame is kept in memory and never saved. Without it you get a frosted blur instead.
+   - **Screen Recording**: lets the fold show your real desktop. One frame is kept in memory and never saved. Without it the rising blur uses the system's frosted glass, which can't deepen toward the hinge.
    - **Input Monitoring**: lets the app see the power button.
 
 Requires macOS 14 or later. The lid fold needs a MacBook with a lid angle sensor, which covers most Apple silicon MacBooks and the 2019 16" MacBook Pro.

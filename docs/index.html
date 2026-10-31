@@ -147,7 +147,7 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
   <header>
     <span class="pill"><b>New</b> Free · open source · v<span class="ver">1.0.0</span></span>
     <h1>Close your MacBook<br>like it's an <span class="grad">iPhone Duo</span>.</h1>
-    <p class="lede">As the lid comes down, your desktop bends into the hinge, frosts over like glass and folds away. Hold the power button and it fades out with a glossy sheen instead of just cutting to black.</p>
+    <p class="lede">As the lid comes down, a soft blur rises from the hinge and swallows your desktop, then clears from the top down when you open it again. Hold the power button and it fades out with a glossy sheen instead of just cutting to black.</p>
     <div class="cta">
       <a class="btn primary" id="download" href="https://github.com/kostakarathana/mac-duo/releases/latest/download/MacDuo.dmg">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.86-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.33-3.5zM14.2 6.1c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.65-1.05 1.68-.92 2.67.97.08 1.96-.49 2.56-1.22z"/></svg>
@@ -185,7 +185,7 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
       <div class="card">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 18h16M6 18l2-11h8l2 11"/></svg></div>
         <h3>Follows your lid in real time</h3>
-        <p>Mac Duo reads the hinge sensor built into your MacBook 60 times a second. The fold starts early and tracks your hand, and if you pause it stays put until you touch your Mac.</p>
+        <p>Mac Duo reads the hinge sensor built into your MacBook 60 times a second. The fold starts early and tracks your hand, if you pause it stays put, and lifting the lid clears it in an instant.</p>
       </div>
       <div class="card">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg></div>
@@ -208,7 +208,7 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
         <div class="rule"><span class="n">1</span><div><b>The lid is heading down past 85°.</b><p>That's early enough that the fold plays across almost the whole close.</p></div></div>
         <div class="rule"><span class="n">2</span><div><b>It's moving shut quickly.</b><p>At least 60°/s, measured with a least-squares slope so sensor jitter can't fake it. Ordinary tilts are much slower than that.</p></div></div>
         <div class="rule"><span class="n">3</span><div><b>It's a big drop.</b><p>At least 22° below where the lid was in the last 1.5 seconds.</p></div></div>
-        <div class="rule"><span class="n">4</span><div><b>Then it holds until you touch your Mac.</b><p>Pause halfway and the fold waits right where it is. Move the trackpad, click or press a key and it unfolds back to your desktop. Slow, careful closers are covered too: below 40° any steady downward motion counts.</p></div></div>
+        <div class="rule"><span class="n">4</span><div><b>Pause and it holds; lift the lid and it's gone.</b><p>Pause halfway and the fold waits right where it is. Lift the lid back up, or move the trackpad, click or press a key, and the blur clears from the top down in under half a second. Slow, careful closers are covered too: below 40° any steady downward motion counts.</p></div></div>
       </div>
       <div class="chart" aria-label="Chart of lid angle over time for a screen adjustment versus a real close">
         <svg viewBox="0 0 420 260" role="img">
@@ -250,7 +250,7 @@ footer { margin-top: 110px; border-top: 1px solid var(--line); padding: 32px 0 4
     <h2>Questions</h2>
     <details><summary>Which Macs does it work on?</summary><p>The lid fold needs a MacBook with a lid angle sensor. That covers most Apple silicon MacBook Air and MacBook Pro models, plus the 16-inch MacBook Pro from 2019. Mac Duo checks for the sensor when it launches and tells you if your Mac doesn't have one. The glossy power-off fade works on any Mac running macOS 14 or later.</p></details>
     <details><summary>Will it fold when I just tilt my screen?</summary><p>No. Readjustments are small or slow. A fold needs a fast (60°/s+), large drop that's already heading below 85°. If it ever starts by mistake, for example because you dipped the lid fast and then stopped, touch the trackpad and it unfolds. Choose <em>Strict</em> in the menu to be even pickier, or <em>Relaxed</em> to fold earlier.</p></details>
-    <details><summary>Why does it want Screen Recording?</summary><p>To bend your actual desktop, Mac Duo grabs a single frame the moment your lid starts moving fast. The frame stays in memory, gets replaced the next time, and is never written to disk or sent anywhere. Without this permission Mac Duo uses a frosted-glass blur over the live screen, which still looks good.</p></details>
+    <details><summary>Why does it want Screen Recording?</summary><p>To blur your actual desktop in layers, Mac Duo grabs a single frame the moment your lid starts moving fast. The frame stays in memory, gets replaced the next time, and is never written to disk or sent anywhere. Without this permission Mac Duo raises the system's frosted-glass blur over the live screen instead, which can't deepen toward the hinge.</p></details>
     <details><summary>Does it change how my Mac sleeps or shuts down?</summary><p>No. macOS still sleeps when the lid closes and still powers off when you hold the button. Mac Duo only draws on top during those moments. For a menu-bar Shut Down or Restart, it delays the app's own exit by about a second and a half so the fade can finish.</p></details>
     <details><summary>Does it drain my battery?</summary><p>Hardly. While the lid sits still, it reads the hinge 15 times a second. That rises to 60 only while the lid is moving, and frames are drawn only during an animation.</p></details>
     <details><summary>Is this affiliated with Apple?</summary><p>No. Mac Duo is an independent fan project inspired by the iPhone Duo's fold animation. It isn't affiliated with or endorsed by Apple.</p></details>

@@ -36,10 +36,11 @@ let delegate = AppDelegate()
 if let i = args.firstIndex(of: "--demo"), args.count > i + 1 {
     delegate.demo = args[i + 1] == "fade" ? .fade : .fold
 }
-//   MacDuo --simulate close|hold|dismiss|adjust|reopen    scripted lid motion through the real app
+//   MacDuo --simulate close|hold|dismiss|adjust|reopen|lift    scripted lid motion through the real app
 if let i = args.firstIndex(of: "--simulate"), args.count > i + 1 {
     let traces: [String: [(t: Double, a: Double)]] = [
         "close": [(0, 110), (0.3, 110), (1.1, 0), (1.6, 0)],
+        "lift": [(0, 110), (0.3, 110), (0.7, 45), (1.2, 45), (1.5, 110), (2.2, 110)],
         "hold": [(0, 110), (0.3, 110), (0.7, 45), (2.5, 45)],
         "dismiss": [(0, 110), (0.3, 110), (0.7, 45), (2.5, 45)],
         "adjust": [(0, 120), (0.3, 120), (0.6, 90), (1.5, 90), (1.9, 125), (2.5, 125)],

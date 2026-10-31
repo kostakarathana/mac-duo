@@ -16,10 +16,8 @@ public struct DetectorConfig: Equatable, Sendable {
     public var dropWindow: TimeInterval = 1.5
     /// At or below this angle the lid counts as shut.
     public var closedAngle: Double = 6
-    /// If an unfold (lid reopening after a close) stops moving for this long, finish it.
-    public var stallTimeout: TimeInterval = 1.0
-    /// Below this speed the lid counts as "not moving".
-    public var stallSpeed: Double = 6
+    /// Lifting the lid this far back up from its lowest point mid-fold counts as reopening.
+    public var reopenRise: Double = 12
     /// Closing faster than this means it's worth grabbing a screenshot, just in case.
     public var prearmSpeed: Double = 25
     /// Careful, slow closers: below this angle nobody is using the screen, so a
@@ -51,10 +49,8 @@ public enum DetectorEvent: Equatable, Sendable {
     case beginFold(startAngle: Double)
     /// The lid reached the closed angle.
     case closed
-    /// The lid is opening again after being closed.
-    case beginUnfold
-    /// Fully open again after an unfold; overlay can go away.
-    case finished
+    /// The lid is coming back up (mid-fold or after a close): return to the desktop now.
+    case reopened
 }
 
 /// Pure, clock-agnostic lid state machine. Feed it samples; it tells you what to draw.
@@ -63,7 +59,6 @@ public struct CloseDetector: Sendable {
         case idle
         case folding(start: Double)
         case closed(start: Double)
-        case unfolding(start: Double)
     }
 
     public private(set) var state: State = .idle
@@ -76,7 +71,7 @@ public struct CloseDetector: Sendable {
 
     private var samples: [(t: TimeInterval, a: Double)] = []
     private var lastPrearm: TimeInterval = -.infinity
-    private var lastAdvance: TimeInterval = 0
+    private var lowest: Double = .infinity
 
     public init(config: DetectorConfig = DetectorConfig()) {
         self.config = config
@@ -91,7 +86,7 @@ public struct CloseDetector: Sendable {
     /// The user touched the Mac (trackpad, click, key): drop the fold without waiting for the lid.
     public mutating func dismiss() {
         // Forget the motion that triggered it, or the same drop would re-trigger instantly.
-        state = .idle; progress = 0; samples.removeAll(); velocity = 0
+        state = .idle; progress = 0; samples.removeAll(); velocity = 0; lowest = .infinity
     }
 
     @discardableResult
@@ -122,6 +117,7 @@ public struct CloseDetector: Sendable {
             let deep = a <= c.deepAngle && velocity <= -c.deepSpeed && farEnough
             if (fastEnough && lowEnough && farEnough) || deep || slammed {
                 let start = a
+                lowest = a
                 state = .folding(start: start)
                 events.append(.beginFold(startAngle: start))
                 if a <= c.closedAngle {
@@ -133,36 +129,31 @@ public struct CloseDetector: Sendable {
             }
 
         case .folding(let start):
-            // Only ever moves forward: pausing or easing the lid back up holds the fold
-            // where it is. The app dismisses it when the user touches the Mac.
+            // Only ever moves forward: pausing holds the fold where it is (the app dismisses
+            // it when the user touches the Mac). Lifting the lid back up ends it.
+            lowest = min(lowest, a)
+            if a >= lowest + c.reopenRise {
+                reopen(&events)
+                break
+            }
             progress = max(progress, Self.progress(a, start: start, closed: c.closedAngle))
             if a <= c.closedAngle {
                 state = .closed(start: start); progress = 1
                 events.append(.closed)
             }
 
-        case .closed(let start):
+        case .closed:
             progress = 1
-            if a > c.closedAngle + 6 {
-                state = .unfolding(start: start)
-                lastAdvance = t
-                progress = Self.progress(a, start: start, closed: c.closedAngle)
-                events.append(.beginUnfold)
-                if a >= start { state = .idle; progress = 0; events.append(.finished) }
-            }
-
-        case .unfolding(let start):
-            progress = Self.progress(a, start: start, closed: c.closedAngle)
-            if abs(velocity) > c.stallSpeed { lastAdvance = t }
-            if a >= start || t - lastAdvance > c.stallTimeout * 1.5 {
-                state = .idle; progress = 0
-                events.append(.finished)
-            } else if a <= c.closedAngle {
-                state = .closed(start: start); progress = 1
-                events.append(.closed)
-            }
+            if a > c.closedAngle + 6 { reopen(&events) }
         }
         return events
+    }
+
+    private mutating func reopen(_ events: inout [DetectorEvent]) {
+        // Forget the closing motion so it can't immediately count as a new close.
+        state = .idle; progress = 0; lowest = .infinity
+        if let last = samples.last { samples = [last] }
+        events.append(.reopened)
     }
 
     static func progress(_ a: Double, start: Double, closed: Double) -> Double {

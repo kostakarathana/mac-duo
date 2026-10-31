@@ -130,14 +130,21 @@ test("every preset folds a normal close") {
     }
 }
 
-// MARK: - A started fold holds until the user touches the Mac
+// MARK: - A started fold holds while paused, and ends as soon as the lid comes back up
 
-test("start closing then reopen: fold holds, never reverses on its own") {
-    let r = Trace(points: [(0, 110), (0.5, 25), (0.9, 110), (3, 110)]).run()
-    check(folded(r.events), "should have started")
-    if case .folding = r.det.state {} else { check(false, "state \(r.det.state)") }
-    let peak = r.progress.max()!
-    check(r.progress.last! == peak && peak > 0.5, "progress fell back: last \(r.progress.last!) peak \(peak)")
+test("start closing then lift the lid: fold ends straight away") {
+    var d = CloseDetector()
+    var t = 0.0, reopenedAt = -1.0
+    for a in stride(from: 110.0, through: 25, by: -3) { d.update(angle: a, at: t); t += 1 / 60 }
+    check(d.isActive, "should have started")
+    for a in stride(from: 25.0, through: 110, by: 3) {
+        if d.update(angle: a, at: t).contains(.reopened), reopenedAt < 0 { reopenedAt = a }
+        t += 1 / 60
+    }
+    check(reopenedAt > 0 && reopenedAt <= 40, "reopened at \(reopenedAt)")
+    check(d.state == .idle && d.progress == 0, "\(d.state)")
+    for _ in 0..<60 { d.update(angle: 110, at: t); t += 1 / 60 }
+    check(d.state == .idle, "re-folded at rest")
 }
 test("pause mid-way: fold holds where it is") {
     let r = Trace(points: [(0, 110), (0.6, 40), (4, 40)]).run()
@@ -145,7 +152,8 @@ test("pause mid-way: fold holds where it is") {
     check(r.progress.last! > 0.4, "progress \(r.progress.last!)")
 }
 test("progress never decreases while folding") {
-    let r = Trace(points: [(0, 110), (0.4, 50), (0.6, 60), (0.9, 30), (1.2, 45), (1.5, 0)], jitter: 1.5).run()
+    let r = Trace(points: [(0, 110), (0.4, 50), (0.6, 55), (0.9, 30), (1.2, 36), (1.5, 0)], jitter: 1.5).run()
+    check(!r.events.contains(.reopened), "small wobble counted as reopening: \(r.events)")
     var ok = true
     for i in 1..<r.progress.count where r.progress[i] < r.progress[i - 1] && r.progress[i - 1] < 1 { ok = false }
     check(ok, "progress decreased")
@@ -162,19 +170,20 @@ test("dismiss clears the fold, and a new close folds again") {
     for a in stride(from: 110.0, through: 0, by: -3) { d.update(angle: a, at: t); t += 1 / 60 }
     if case .closed = d.state {} else { check(false, "second close: \(d.state)") }
 }
-test("close then reopen unfolds and finishes") {
+test("close then reopen ends the fold as soon as the lid lifts") {
     let r = Trace(points: [(0, 110), (0.8, 0), (2, 0), (2.8, 110), (3.5, 110)]).run()
     let e = r.events
-    check(e.contains(.closed) && e.contains(.beginUnfold) && e.contains(.finished), "\(e)")
+    check(e.contains(.closed) && e.contains(.reopened), "\(e)")
     check(r.det.state == .idle && r.progress.last == 0, "\(r.det.state)")
+    check(e.filter { $0 == .closed }.count == 1, "re-folded after reopening: \(e)")
 }
-test("waking with the lid already open (sensor jumped) finishes immediately") {
+test("waking with the lid already open (sensor jumped) ends immediately") {
     var d = CloseDetector()
     var t = 0.0
     for a in stride(from: 110.0, through: 0, by: -3) { d.update(angle: a, at: t); t += 1 / 60 }
     if case .closed = d.state {} else { check(false, "not closed: \(d.state)") }
     let ev = d.update(angle: 112, at: t + 30)
-    check(ev.contains(.finished) && d.state == .idle, "\(ev)")
+    check(ev.contains(.reopened) && d.state == .idle, "\(ev)")
 }
 test("prearm fires early, before the fold, and is rate-limited") {
     let r = Trace(points: [(0, 115), (0.8, 0), (1.0, 0)]).run()
@@ -212,25 +221,23 @@ test("stray key-up ignored") {
 
 // MARK: - Animation curves
 
-test("fold frames: start clear, end gone, no moving box") {
+test("fold frames: start clear, blur rises from the hinge, ends black, no moving box") {
     let a = FrameParams.fold(0), z = FrameParams.fold(1)
-    check(a.shade == 0 && a.panelOpacity == 1 && a.softBlur == 0 && a.vignette > 2, "start \(a)")
-    check(a.blurFront > 1, "frost already on screen at start")
-    check(z.panelOpacity == 0 && z.shade > 0.99 && z.blurFront < 0 && z.darkFront < 0, "end \(z)")
-    for i in 0...100 {
-        let f = FrameParams.fold(Double(i) / 100)
-        check(f.rotation == 0 && f.scale == 1 && f.cornerRadius == 0, "box transform at \(i)")
-    }
+    check(a.shade == 0 && a.panelOpacity == 1 && a.blurFront == 0 && a.tint == 0, "start \(a)")
+    check(z.panelOpacity == 0 && z.shade > 0.99 && z.blurFront >= FrameParams.maxBlurFront - 1e-9, "end \(z)")
     var last = FrameParams.fold(0)
     for i in 1...100 {
         let f = FrameParams.fold(Double(i) / 100)
-        check(f.shade >= last.shade && f.blurFront <= last.blurFront && f.darkFront <= last.darkFront && f.vignette <= last.vignette, "not monotone at \(i)")
+        check(f.rotation == 0 && f.scale == 1 && f.cornerRadius == 0, "box transform at \(i)")
+        check(f.shade >= last.shade && f.blurFront > last.blurFront && f.tint >= last.tint, "not monotone at \(i)")
         last = f
     }
 }
-test("fold is visible early: frost starts within the first 10% of the close") {
-    let f = FrameParams.fold(0.1)
-    check(f.softBlur > 0.5 && f.blurFront < 1.0, "\(f.softBlur) \(f.blurFront)")
+test("fold is visible early and climbs gradually") {
+    let early = FrameParams.fold(0.1).blurFront, mid = FrameParams.fold(0.5).blurFront
+    check(early > 0.15 && early < 0.4, "early \(early)")
+    check(mid > 0.8 && mid < 1.2, "mid \(mid)")
+    check(FrameParams.fold(0.75).shade == 0, "dark too soon")
 }
 test("glossy fade: sheen peaks mid-way, ends black") {
     let mid = (0...100).map { FrameParams.glossyFade(Double($0) / 100).sheen }

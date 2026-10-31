@@ -2,12 +2,14 @@ import AppKit
 import CoreImage
 import ScreenCaptureKit
 
-/// A captured frame of the built-in display plus pre-blurred copies for the glass effect.
+/// A captured frame of the built-in display plus progressively stronger blurred copies.
 struct Snapshot {
     let sharp: CGImage
-    let soft: CGImage
-    let heavy: CGImage
+    /// Increasing blur radius; each step is a little more saturated, like Apple's materials.
+    let levels: [CGImage]
     let takenAt: Date
+    var soft: CGImage { levels[1] }
+    var heavy: CGImage { levels[3] }
 }
 
 enum ScreenSnapshot {
@@ -38,17 +40,24 @@ enum ScreenSnapshot {
         }
     }
 
+    static let blurRadii: [Double] = [6, 16, 32, 56, 90]   // Gaussian sigma, in pixels
+
     static func makeSnapshot(_ img: CGImage) -> Snapshot {
-        Snapshot(sharp: img, soft: blurred(img, radius: 10) ?? img, heavy: blurred(img, radius: 34) ?? img, takenAt: Date())
+        let levels = blurRadii.enumerated().map { k, r in
+            blurred(img, radius: r, saturation: 1 + 0.1 * Double(k + 1)) ?? img
+        }
+        return Snapshot(sharp: img, levels: levels, takenAt: Date())
     }
 
-    /// Blur at quarter resolution — cheap, and the result is soft anyway.
-    static func blurred(_ img: CGImage, radius: Double) -> CGImage? {
+    /// Blur at reduced resolution — cheap, and the result is soft anyway. Light blurs keep
+    /// half resolution so they don't look smeared.
+    static func blurred(_ img: CGImage, radius: Double, saturation: Double) -> CGImage? {
         let input = CIImage(cgImage: img)
-        let s = 0.25
+        let s = radius < 12 ? 0.5 : 0.25
         let small = input.transformed(by: CGAffineTransform(scaleX: s, y: s))
         let out = small.clampedToExtent()
-            .applyingGaussianBlur(sigma: radius * s * 2)
+            .applyingGaussianBlur(sigma: radius * s)
+            .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: saturation])
             .cropped(to: small.extent)
         return ci.createCGImage(out, from: small.extent)
     }

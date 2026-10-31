@@ -74,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         buildMenu()
+        NSLog("MacDuo: screen recording \(ScreenSnapshot.hasPermission ? "granted" : "not granted")")
         power.onDown = { [weak self] in self?.powerDown() }
         power.onUp = { [weak self] in self?.powerUp() }
         if Prefs.powerFadeEnabled, PowerButtonMonitor.hasPermission { power.start() }
@@ -139,18 +140,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // A started fold holds until the user touches the Mac: trackpad, click, scroll or key.
         if overlay.isVisible, overlay.mode == .fold, dismissing == nil, let since = foldShownAt {
-            switch detector.state {
-            case .folding, .unfolding:
-                if userInput(after: since + 0.3, now: now) {
-                    detector.dismiss()
-                    dismissing = (now, shown)
-                }
-            default: break
+            if case .folding = detector.state, userInput(after: since + 0.3, now: now) {
+                detector.dismiss()
+                dismissing = (now, shown)
             }
         }
 
         if let d = dismissing {
-            // Quick unfold back to the desktop.
+            // Unfold back to the desktop: the blur clears from the top edge down to the hinge.
             let u = min(1, (now - d.start) / 0.45)
             shown = d.from * (1 - Ease.inOut(u))
             overlay.render(.fold(shown))
@@ -185,9 +182,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             foldShownAt = CACurrentMediaTime()
             overlay.show(.fold, snapshot: fresh, on: screen)
             if fresh == nil { captureSnapshot() }
-        case .finished:
-            break // `shown` eases back to 0, then the overlay hides itself
-        case .closed, .beginUnfold:
+        case .reopened:
+            // Lid lifted: play the fold backwards quickly instead of tracking the hinge.
+            if overlay.isVisible, overlay.mode == .fold, dismissing == nil { dismissing = (CACurrentMediaTime(), shown) }
+        case .closed:
             if !overlay.isVisible, let s = DuoOverlay.builtInScreen() { overlay.show(.fold, snapshot: snapshot, on: s) }
         }
     }
@@ -336,10 +334,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let t = now - p.start
         switch p.kind {
         case .fold:
-            // Close over 0.9 s, pause shut, then open again.
-            let v: Double = t < 0.9 ? Ease.inOut(t / 0.9) : t < 1.6 ? 1 : 1 - Ease.inOut((t - 1.6) / 0.9)
+            // Close over 1.4 s, pause shut, then open again.
+            let v: Double = t < 1.4 ? Ease.inOut(t / 1.4) : t < 2.2 ? 1 : 1 - Ease.inOut((t - 2.2) / 1.2)
             overlay.render(.fold(v))
-            if t > 2.5 { preview = nil; overlay.hide() }
+            if t > 3.4 { preview = nil; overlay.hide() }
         case .fade:
             overlay.render(.glossyFade(t / Self.fadeDuration))
             if t > Self.fadeDuration + 0.7 { preview = nil; overlay.hide(fadeDuration: 0.45) }
